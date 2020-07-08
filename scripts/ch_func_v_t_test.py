@@ -5,24 +5,82 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from yt.analysis_modules.halo_analysis.api import *
 import CF
+
+
 h=0.6814000010490417
-a=0.1451
-ds = yt.load("/data/dbrobins/20/A/rei20c1_a0.1451_RF/rei20c1_a0.1451_RF.art")
-hl=yt.load("/home/dbrobins/repos/radfieldcooling/scripts/halo_catalogs/RF_0.1451_catalog/RF_0.1451_catalog.0.h5") #read in corresponding halo catalog
-halos=hl.all_data() #extract halo information                                                                                                                                                     
-halos_df=pd.DataFrame({"ID":halos["halos", "particle_identifier"], "Mvir":halos["halos", "particle_mass"].in_units("Msun/h"),'Rvir':halos["halos", "virial_radius"].in_units("kpccm/h"), "x":halos["halos", "particle_position_x"].in_units("Mpccm/h"), "y":halos['halos', "particle_position_y"].in_units("Mpccm/h"), "z":halos['halos', "particle_position_z"].in_units("Mpccm/h")}) #put halo ID,virial mass, virial radius, position in a dataframe                                                                                                                                              
+aexp = '0.1451'
+a = float(aexp)
+
+
+ds = yt.load("/data/dbrobins/20/A/rei20c1_a0.1451_RF/rei20c1_a"+aexp+"_RF.art")
+
+
+#  Read in halo catalog -- have a halo_catalog.py file that contains:
+#  import yt
+#  class HaloCatalog() :
+#      """
+#      From h5file, create a dataframe of all the halos in the h5filename
+#      Usage:
+#      hc = HaloCatalog(h5filename)
+#      massive_halos = hc.select_halos(property='Mvir', min=1e9, max=1.05e9)
+#
+#
+#      """
+#      def __init__(self, h5filename) :
+#          hl = yt.load(h5filename)
+#          halos=hl.all_data()
+#          self.halos_df = pd.DataFrame .....
+#
+#      def select_halos(self, property='Mvir', min=1e9, max=1.1e9) :
+#          # Do stuff....
+#          return selected_halos
+
+hl=yt.load("/home/dbrobins/repos/radfieldcooling/scripts/halo_catalogs/RF_"+aexp+"_catalog/RF_"+aexp+"_catalog.0.h5") #read in corresponding halo catalog
+halos=hl.all_data() #extract halo information
+halos_df=pd.DataFrame({"ID":halos["halos", "particle_identifier"], "Mvir":halos["halos", "particle_mass"].in_units("Msun/h"),'Rvir':halos["halos", "virial_radius"].in_units("kpccm/h"), "x":halos["halos", "particle_position_x"].in_units("Mpccm/h"), "y":halos['halos', "particle_position_y"].in_units("Mpccm/h"), "z":halos['halos', "particle_position_z"].in_units("Mpccm/h")}) #put halo ID,virial mass, virial radius, position in a dataframe
+
+
+#  Halo selection from halo catalog object
 halos_df=halos_df.sort_values("Mvir", ascending=False) #sort halos by virial mass in descending order
 #ds.add_field(('gas', 'baryon_number_density'), function=rho_to_n_b, units='1/cm**3') #Create derived fields using functions from derived_field_ch_nb                                             
 halos_mass_10e9_df=halos_df.loc[(halos_df['Mvir'] >= 10**9) & (halos_df['Mvir'] <= 1.1*10**9)] 
 #ds.add_field(('gas', 'cooling_rate'), function=cooling_rate, units='erg*cm**3/s')
 #ds.add_field(('gas', 'heating_rate'), function=heating_rate, units='erg*cm**3/s')
+
+
 from derived_fields_ch_nb import *
+
+#  Define bins - not necessarily density
 min_den=1
-max_den=10 #min and max density in 1/cm^3                                                                                                                                                         
-bins_per_dex=20 #number of bins per factor of 10 (dex) in T (K)                                                                                                                                   
+max_den=10 #min and max density in 1/cm^3
+bins_per_dex=20 #number of bins per factor of 10 (dex) in T (K)
+
+# Plot
 fig, (ax_c, ax_h)=plt.subplots(2,1,sharex=True) #Create two horizontal plots with the same x-axis (temperature) for the cooling and heating rates                                                 
 colors = ['red', 'blue', 'orange'] #Create an array of colors     
-for k in range(3):
+
+
+# For k = 0,1,2 halos, you are pulling all information.  
+# Suggestion:  create a halo_cooling_heating_functions.py that contains:
+#
+#
+# import yt
+#
+# def create_isochronous_chf(halos_df, bins=np.logspace(0,1,num=20), bin_field='density', savenpz=True) :
+#     """For a single halo, bin the values, identify the 25th, 50th, and 75th percentile values"""
+#     # DO STUFF
+#     bin_centers = get_bin_centers(bins)
+#     isochronous_chf = {'cf25': , 'hf25': , .... }
+#     if savenpz : ....
+#     return isochronous_chf
+#     
+# def get_bin_centers(bins) :
+#     # DO STUFF
+#     return bin_centers
+
+
+
+for k in range(3):  # When looping over a thing, use a variable name that corresponds to that thing, e.g. k --> massive_halo
     ID=halos_df.iloc[k]['ID'] #extract halo ID, virial mass, virial radius, halo position                                                                                               
     Mvir=halos_df.iloc[k]['Mvir']
     R=halos_df.iloc[k]['Rvir']
@@ -63,8 +121,13 @@ for k in range(3):
     heating_stats_func=[]
     heating_stats_val=[]
     counter = 0
+
+    #  CHALLENGE:  Reduce the following into ~5 lines
     for i in range(len(t_bins)-1): #Loop through all temperature bins (more specifically, the lower limit of each bin)                                                                            
         for j in range(len(n_b)): #Loop through all n_b values (which loops through all cells)
+            #  SHOULD be able to do the following 2 lines at once, not in a loop
+            # cf_hf_ierr = np.apply_along_axis(CF.frtgetcf, .... )  # This will be a 3xn_b array
+
             (cfun,hfun,ierr)=CF.frtgetcf(all_centers[i], n_b[j], Z[j], P_LW[j], P_HI[j], P_HeI[j], P_CVI[j]) #call f2py function to get gamma, lambda for the T at the center of the bin, and for the values of the other variable in the given cell
             cooling_stats_func.append(cfun)
             heating_stats_func.append(hfun)
@@ -91,6 +154,7 @@ for k in range(3):
         counter = 0
         cooling_stats_val=[]
         heating_stats_val=[]
+        
     ax_c.plot(all_centers, binned_c_func, label="Mvir=%.2E [M$_\odot$/h], function" % Mvir, color=colors[k]) #Plot median cooling vs. bin centers using color allocated to that halo, label with mass to 3 sf 
     #ax_c.fill_between(all_centers, c_25_func, c_75_func, alpha=0.2, color=colors[k]) #Fill between 25th-75th percentiles in same color                                                           
     ax_h.plot(all_centers, binned_h_func, color=colors[k]) #Do the same thing for heating rate                                                                                                    
